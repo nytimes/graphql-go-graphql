@@ -27,6 +27,9 @@ type (
 	ResolveFieldFinishFunc func(interface{}, error)
 	// resolveFieldFinishFuncHandler calls the resolveFieldFinishFns for all the extensions
 	resolveFieldFinishFuncHandler func(interface{}, error) []gqlerrors.FormattedError
+
+	// ExecuteFunc computes a GraphQL response.
+	ExecuteFunc func(p ExecuteParams) (result *Result)
 )
 
 // Extension is an interface for extensions in graphql
@@ -48,6 +51,11 @@ type Extension interface {
 
 	// ResolveFieldDidStart notifies about the start of the resolving of a field
 	ResolveFieldDidStart(context.Context, *ResolveInfo) (context.Context, ResolveFieldFinishFunc)
+
+	// ExecuteMiddleware allows the extension to wrap the execution using a chain-of-responsibility pattern,
+	// modeled after http.Handler. next must be called somewhere within the implementation to preserve the chain. The
+	// final call and only the final call should trigger ExecutionDidStart and ExecutionFinish hooks.
+	ExecuteMiddleware(next ExecuteFunc) ExecuteFunc
 
 	// HasResult returns if the extension wants to add data to the result
 	HasResult() bool

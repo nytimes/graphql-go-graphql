@@ -247,6 +247,40 @@ func TestExtensionExecutionFinishFuncPanic(t *testing.T) {
 	}
 }
 
+func TestExecutionMiddlewareWasCalled(t *testing.T) {
+	ext := newtestExt("testExt")
+	var called bool
+	ext.executionFunc = func(next graphql.ExecuteFunc) graphql.ExecuteFunc {
+		return func(p graphql.ExecuteParams) *graphql.Result {
+			called = true
+			return next(p)
+		}
+	}
+
+	schema := tinit(t)
+	query := `query Example { a }`
+	schema.AddExtensions(ext)
+
+	result := graphql.Do(graphql.Params{
+		Schema:        schema,
+		RequestString: query,
+	})
+
+	expected := &graphql.Result{
+		Data: map[string]interface{}{
+			"a": "foo",
+		},
+	}
+
+	if !reflect.DeepEqual(expected, result) {
+		t.Fatalf("Unexpected result, Diff: %v", testutil.Diff(expected, result))
+	}
+
+	if !reflect.DeepEqual(called, true) {
+		t.Fatalf("Middleware was not called")
+	}
+}
+
 func TestExtensionResolveFieldDidStartPanic(t *testing.T) {
 	ext := newtestExt("testExt")
 	ext.resolveFieldDidStartFn = func(ctx context.Context, i *graphql.ResolveInfo) (context.Context, graphql.ResolveFieldFinishFunc) {
@@ -424,6 +458,11 @@ func newtestExt(name string) *testExt {
 			return nil
 		}
 	}
+	if ext.executionFunc == nil {
+		ext.executionFunc = func(next graphql.ExecuteFunc) graphql.ExecuteFunc {
+			return next
+		}
+	}
 	return ext
 }
 
@@ -436,6 +475,7 @@ type testExt struct {
 	validationDidStartFn   func(ctx context.Context) (context.Context, graphql.ValidationFinishFunc)
 	executionDidStartFn    func(ctx context.Context) (context.Context, graphql.ExecutionFinishFunc)
 	resolveFieldDidStartFn func(ctx context.Context, i *graphql.ResolveInfo) (context.Context, graphql.ResolveFieldFinishFunc)
+	executionFunc          func(next graphql.ExecuteFunc) graphql.ExecuteFunc
 }
 
 func (t *testExt) Init(ctx context.Context, p *graphql.Params) context.Context {
@@ -468,4 +508,8 @@ func (t *testExt) ExecutionDidStart(ctx context.Context) (context.Context, graph
 
 func (t *testExt) ResolveFieldDidStart(ctx context.Context, i *graphql.ResolveInfo) (context.Context, graphql.ResolveFieldFinishFunc) {
 	return t.resolveFieldDidStartFn(ctx, i)
+}
+
+func (t *testExt) ExecuteMiddleware(next graphql.ExecuteFunc) graphql.ExecuteFunc {
+	return t.executionFunc(next)
 }

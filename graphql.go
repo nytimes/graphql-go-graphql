@@ -105,7 +105,13 @@ func Do(p Params) *Result {
 		}
 	}
 
-	return Execute(ExecuteParams{
+	var exe ExecuteFunc
+	exe = Execute
+	for _, e := range p.Schema.extensions {
+		exe = e.ExecuteMiddleware(exe)
+	}
+
+	return exe(ExecuteParams{
 		Schema:        p.Schema,
 		Root:          p.RootObject,
 		AST:           AST,
